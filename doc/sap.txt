@@ -1,0 +1,43 @@
+*sap.txt*    Buffer-based file tree browser
+
+==============================================================================
+CONTENTS                                                         *sap-contents*
+
+    1. Introduction .......................... |sap-introduction|
+    2. Setup ................................. |sap-setup|
+    3. Configuration ......................... |sap-configuration|
+    4. Keymaps ............................... |sap-keymaps|
+    5. API ................................... |sap-api|
+
+==============================================================================
+1. INTRODUCTION                                              *sap-introduction*
+
+Sap is a buffer-based file tree browser for Neovim.
+
+==============================================================================
+2. SETUP                                                          *sap-setup*
+
+>lua
+    require("sap").setup({})
+<
+
+==============================================================================
+3. CONFIGURATION                                          *sap-configuration*
+
+TODO: document options
+
+==============================================================================
+4. KEYMAPS                                                      *sap-keymaps*
+
+TODO: document keymaps
+
+==============================================================================
+5. API                                                              *sap-api*
+
+sap.open({path})                                                   *sap.open()*
+    Open sap buffer for a directory.
+
+    Parameters: ~
+        {path}  (string|nil) Directory path. Defaults to cwd.
+
+vim:tw=78:ts=8:ft=help:norl:
