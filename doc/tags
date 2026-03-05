@@ -1,0 +1,16 @@
+:Sap	sap.txt	/*:Sap*
+sap-commands	sap.txt	/*sap-commands*
+sap-config-icons	sap.txt	/*sap-config-icons*
+sap-config-indent_size	sap.txt	/*sap-config-indent_size*
+sap-config-keys	sap.txt	/*sap-config-keys*
+sap-config-show_hidden	sap.txt	/*sap-config-show_hidden*
+sap-configuration	sap.txt	/*sap-configuration*
+sap-contents	sap.txt	/*sap-contents*
+sap-highlights	sap.txt	/*sap-highlights*
+sap-introduction	sap.txt	/*sap-introduction*
+sap-keymaps	sap.txt	/*sap-keymaps*
+sap-setup	sap.txt	/*sap-setup*
+sap-usage	sap.txt	/*sap-usage*
+sap.open()	sap.txt	/*sap.open()*
+sap.setup()	sap.txt	/*sap.setup()*
+sap.txt	sap.txt	/*sap.txt*

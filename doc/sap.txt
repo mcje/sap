@@ -1,43 +1,240 @@
-*sap.txt*    Buffer-based file tree browser
+*sap.txt*  Tree-style file manager for Neovim
+
+Author:
+License:  MIT
 
 ==============================================================================
-CONTENTS                                                         *sap-contents*
+CONTENTS                                                        *sap-contents*
 
-    1. Introduction .......................... |sap-introduction|
-    2. Setup ................................. |sap-setup|
-    3. Configuration ......................... |sap-configuration|
-    4. Keymaps ............................... |sap-keymaps|
-    5. API ................................... |sap-api|
-
-==============================================================================
-1. INTRODUCTION                                              *sap-introduction*
-
-Sap is a buffer-based file tree browser for Neovim.
+    1. Introduction ............................ |sap-introduction|
+    2. Setup ................................... |sap-setup|
+    3. Usage ................................... |sap-usage|
+    4. Commands ................................ |sap-commands|
+    5. Keymaps ................................. |sap-keymaps|
+    6. Configuration ........................... |sap-configuration|
+    7. Highlights .............................. |sap-highlights|
 
 ==============================================================================
-2. SETUP                                                          *sap-setup*
+INTRODUCTION                                                *sap-introduction*
 
->lua
-    require("sap").setup({})
+Sap is a tree-style file manager for Neovim. Edit the buffer to rename, move,
+copy, create, and delete files. Changes are tracked as pending edits and only
+applied when you save with |:write|.
+
+Features:
+- Tree navigation with expandable/collapsible directories
+- Rename files by editing text
+- Delete files by removing lines
+- Move files by changing indentation
+- Copy files by yanking and pasting lines
+- Confirmation dialog before applying changes
+- Optional integration with nvim-web-devicons
+
+==============================================================================
+SETUP                                                              *sap-setup*
+
+Using lazy.nvim: >lua
+    {
+        "username/sap.nvim",
+        opts = {},
+        keys = {
+            { "-", "<cmd>Sap<cr>", desc = "Open file manager" },
+        },
+    }
 <
+Using packer.nvim: >lua
+    use {
+        "username/sap.nvim",
+        config = function()
+            require("sap").setup()
+            vim.keymap.set("n", "-", "<cmd>Sap<cr>")
+        end
+    }
+<
+                                                                  *sap.setup()*
+sap.setup({opts})
+    Initialize sap with optional configuration. See |sap-configuration| for
+    available options.
+
+                                                                   *sap.open()*
+sap.open({path})
+    Open the file manager at {path}. If {path} is nil, opens at the current
+    working directory.
 
 ==============================================================================
-3. CONFIGURATION                                          *sap-configuration*
+USAGE                                                              *sap-usage*
 
-TODO: document options
+Open the file manager with |:Sap| or |sap.open()|. The buffer shows your
+filesystem as an editable tree.
+
+NAVIGATION ~
+
+- Press <CR> on a file to open it
+- Press <CR> on a directory to expand/collapse it
+- Press <BS> to go to the parent directory
+- Press <C-CR> to set the current directory as root
+
+FILE OPERATIONS ~
+
+Edit the buffer like any text file, then save with |:write| to apply changes.
+A confirmation dialog will show all pending operations.
+
+Renaming:       Edit the filename text
+Deleting:       Delete the line (e.g., `dd`)
+Creating:       Add a new line with the filename
+                Add trailing `/` for directories
+Moving:         Change indentation to move under a different parent
+Copying:        Yank a line (`yy`), paste it (`p`)
+                The original stays, a new copy is created
+
+Use `>>` / `<<` in normal mode or `>` / `<` in visual mode to change
+indentation while preserving internal state.
+
+EXAMPLE WORKFLOW ~
+
+Starting with: >
+    project/
+        src/
+            main.lua
+            utils.lua
+        README.md
+<
+1. Rename `utils.lua` to `helpers.lua`: edit the text
+2. Move `helpers.lua` to project root: unindent with `<<`
+3. Delete `README.md`: press `dd`
+4. Create `docs/`: add new line with `docs/`
+5. Save with `:w` and confirm changes
 
 ==============================================================================
-4. KEYMAPS                                                      *sap-keymaps*
+COMMANDS                                                        *sap-commands*
 
-TODO: document keymaps
+:Sap {path}                                                             *:Sap*
+    Open the file manager at {path}. If {path} is omitted, opens at the
+    current working directory.
+
+The following commands are available within a sap buffer:
+
+:Sap open           Open file under cursor, or toggle directory expand
+:Sap parent         Navigate to parent directory
+:Sap set_root       Set directory under cursor as new root
+:Sap refresh        Refresh from filesystem (discards pending edits)
+:Sap quit           Close the file manager
+:Sap toggle_hidden  Toggle visibility of hidden files (dotfiles)
+:Sap expand         Expand directory under cursor
+:Sap collapse       Collapse directory under cursor
+:Sap indent         Indent current line (move into parent above)
+:Sap unindent       Unindent current line (move to grandparent)
 
 ==============================================================================
-5. API                                                              *sap-api*
+KEYMAPS                                                          *sap-keymaps*
 
-sap.open({path})                                                   *sap.open()*
-    Open sap buffer for a directory.
+Default keymaps in sap buffers:
 
-    Parameters: ~
-        {path}  (string|nil) Directory path. Defaults to cwd.
+    Key         Mode    Description ~
+    <CR>        n       Open file / toggle directory
+    <BS>        n       Go to parent directory
+    <C-CR>      n       Set directory as root
+    R           n       Refresh from filesystem
+    q           n       Close
+    .           n       Toggle hidden files
+    l           n       Expand directory
+    h           n       Collapse directory
+    >>          n       Indent line
+    <<          n       Unindent line
+    >           v       Indent selection
+    <           v       Unindent selection
 
+All keymaps can be customized via |sap-configuration|.
+
+==============================================================================
+CONFIGURATION                                              *sap-configuration*
+
+Pass options to |sap.setup()|: >lua
+
+    require("sap").setup({
+        -- Show hidden files (dotfiles) by default
+        show_hidden = false,
+
+        -- Indentation width in spaces
+        indent_size = 4,
+
+        -- Icon configuration
+        icons = {
+            use_devicons = true,  -- Use nvim-web-devicons if available
+            directory = "",      -- Fallback directory icon
+            file = "",           -- Fallback file icon
+        },
+
+        -- Keymaps (set to false to disable all defaults)
+        keys = {
+            { "<CR>", "<cmd>Sap open<cr>", desc = "Open file / toggle dir" },
+            { "<BS>", "<cmd>Sap parent<cr>", desc = "Go to parent" },
+            -- ... see defaults below
+        },
+    })
+<
+                                                       *sap-config-show_hidden*
+show_hidden ~
+    Type: boolean
+    Default: `false`
+
+    Whether to show hidden files (dotfiles) by default. Toggle at runtime
+    with `.` or `:Sap toggle_hidden`.
+
+                                                       *sap-config-indent_size*
+indent_size ~
+    Type: integer
+    Default: `4`
+
+    Number of spaces per indentation level in the tree view.
+
+                                                              *sap-config-icons*
+icons ~
+    Type: table
+    Default: `{ use_devicons = true, directory = "", file = "" }`
+
+    Icon configuration. If `use_devicons` is true and nvim-web-devicons is
+    installed, file-type-specific icons will be used.
+
+                                                               *sap-config-keys*
+keys ~
+    Type: table or false
+    Default: (see below)
+
+    Keymap definitions. Set to `false` to disable all default keymaps.
+    Each entry is a table: `{ lhs, rhs, mode = "n", desc = "..." }`
+
+    Default keymaps: >lua
+        {
+            { "<CR>", "<cmd>Sap open<cr>", desc = "Open file / toggle dir" },
+            { "<BS>", "<cmd>Sap parent<cr>", desc = "Go to parent" },
+            { "<C-CR>", "<cmd>Sap set_root<cr>", desc = "Set as root" },
+            { "R", "<cmd>Sap refresh<cr>", desc = "Refresh" },
+            { "q", "<cmd>Sap quit<cr>", desc = "Close" },
+            { ".", "<cmd>Sap toggle_hidden<cr>", desc = "Toggle hidden" },
+            { "l", "<cmd>Sap expand<cr>", desc = "Expand directory" },
+            { "h", "<cmd>Sap collapse<cr>", desc = "Collapse directory" },
+            { ">>", "<cmd>Sap indent<cr>", desc = "Indent" },
+            { "<<", "<cmd>Sap unindent<cr>", desc = "Unindent" },
+            { ">", "<cmd>Sap indent<cr>", mode = "v", desc = "Indent" },
+            { "<", "<cmd>Sap unindent<cr>", mode = "v", desc = "Unindent" },
+        }
+<
+==============================================================================
+HIGHLIGHTS                                                    *sap-highlights*
+
+Sap defines the following highlight groups:
+
+    Group           Default link    Description ~
+    SapDirectory    Directory       Directory names
+    SapFile         Normal          Regular file names
+    SapLink         Constant        Symbolic links
+    SapExecutable   String          Executable files
+    SapHidden       Comment         Hidden files (dotfiles)
+    SapError        DiagnosticError Error indicators
+
+Override these in your config: >lua
+    vim.api.nvim_set_hl(0, "SapDirectory", { fg = "#5f87af", bold = true })
+<
+==============================================================================
 vim:tw=78:ts=8:ft=help:norl:
