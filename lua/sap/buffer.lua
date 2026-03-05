@@ -10,6 +10,36 @@ local M = {}
 ---@type table<integer, State>
 M.states = {}
 
+-- Pending sync timers per buffer (for debouncing)
+---@type table<integer, uv_timer_t>
+local sync_timers = {}
+
+local SYNC_DEBOUNCE_MS = 150
+
+--- Debounced sync - waits for typing to pause before syncing
+---@param bufnr integer
+local function debounced_sync(bufnr)
+    -- Cancel existing timer for this buffer
+    if sync_timers[bufnr] then
+        sync_timers[bufnr]:stop()
+        sync_timers[bufnr]:close()
+        sync_timers[bufnr] = nil
+    end
+
+    -- Schedule new sync
+    local timer = vim.uv.new_timer()
+    sync_timers[bufnr] = timer
+    timer:start(SYNC_DEBOUNCE_MS, 0, vim.schedule_wrap(function()
+        if sync_timers[bufnr] then
+            sync_timers[bufnr]:close()
+            sync_timers[bufnr] = nil
+        end
+        if vim.api.nvim_buf_is_valid(bufnr) and M.states[bufnr] then
+            M.sync(bufnr)
+        end
+    end))
+end
+
 render.setup_highlights()
 render.setup_decoration_provider()
 
@@ -41,6 +71,11 @@ local function setup_autocmds(bufnr)
         buffer = bufnr,
         callback = function()
             M.states[bufnr] = nil
+            if sync_timers[bufnr] then
+                sync_timers[bufnr]:stop()
+                sync_timers[bufnr]:close()
+                sync_timers[bufnr] = nil
+            end
         end,
     })
 
@@ -65,11 +100,11 @@ local function setup_autocmds(bufnr)
         end,
     })
 
-    -- Sync buffer changes to pending edits
+    -- Sync buffer changes to pending edits (debounced)
     vim.api.nvim_create_autocmd("TextChanged", {
         buffer = bufnr,
         callback = function()
-            M.sync(bufnr)
+            debounced_sync(bufnr)
         end,
     })
 end
