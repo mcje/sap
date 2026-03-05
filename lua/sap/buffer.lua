@@ -4,6 +4,7 @@ local diff = require("sap.diff")
 local render = require("sap.render")
 local fs = require("sap.fs")
 local config = require("sap.config")
+local constants = require("sap.constants")
 
 local M = {}
 
@@ -52,7 +53,7 @@ local function setup_buffer_options(bufnr, bufname)
 
     -- Syntax for concealing ID prefix
     vim.api.nvim_buf_call(bufnr, function()
-        vim.cmd([[syntax match sapEntryId "^///\d\+:" conceal]])
+        vim.cmd(string.format([[syntax match sapEntryId "%s" conceal]], constants.ID_SYNTAX_PATTERN))
     end)
 end
 
@@ -114,7 +115,7 @@ end
 ---@return string? error
 function M.create(path)
     path = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
-    local bufname = "sap:///" .. path
+    local bufname = constants.BUFFER_SCHEME .. path
 
     -- Check for existing buffer
     local existing = vim.fn.bufnr(bufname)

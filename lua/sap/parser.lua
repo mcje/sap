@@ -1,3 +1,5 @@
+local constants = require("sap.constants")
+
 local M = {}
 
 ---@class ParsedEntry
@@ -15,7 +17,7 @@ local M = {}
 ---@return string name
 ---@return "file"|"directory" type
 function M.parse_line(line)
-    local id, rest = line:match("^///(%d+):(.*)$")
+    local id, rest = line:match(constants.ID_PATTERN)
     local ftype = line:match("/$") and "directory" or "file"
 
     if not id then

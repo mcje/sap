@@ -1,6 +1,7 @@
 local buffer = require("sap.buffer")
 local parser = require("sap.parser")
 local render = require("sap.render")
+local constants = require("sap.constants")
 
 local M = {}
 
@@ -75,14 +76,14 @@ function M.parent()
     -- New root line (depth 0)
     if new_root_entry then
         local suffix = new_root_entry.type == "directory" and "/" or ""
-        local prefix = string.format("///%d:", new_root_entry.id)
+        local prefix = string.format(constants.ID_FORMAT,new_root_entry.id)
         new_lines[#new_lines + 1] = prefix .. new_root_entry.name .. suffix
     end
 
     -- Sibling lines (depth 1)
     for _, sibling in ipairs(siblings) do
         local suffix = sibling.type == "directory" and "/" or ""
-        local prefix = sibling.id and string.format("///%d:", sibling.id) or ""
+        local prefix = sibling.id and string.format(constants.ID_FORMAT,sibling.id) or ""
         new_lines[#new_lines + 1] = prefix .. indent_str .. sibling.name .. suffix
     end
 

@@ -1,5 +1,6 @@
 local config = require("sap.config")
 local parser = require("sap.parser")
+local constants = require("sap.constants")
 
 local M = {}
 
@@ -92,7 +93,7 @@ function M.setup_decoration_provider()
             end
 
             -- Calculate column after prefix
-            local prefix_len = id and #string.format("///%d:", id) or 0
+            local prefix_len = id and #string.format(constants.ID_FORMAT,id) or 0
             local col = prefix_len + indent
 
             -- Get entry info from state
@@ -175,7 +176,7 @@ function M.to_lines(entries)
         local indent = string.rep(indent_str, e.depth)
         local suffix = e.entry.type == "directory" and "/" or ""
         -- Entries without ID are new (pending creates)
-        local prefix = e.entry.id and string.format("///%d:", e.entry.id) or ""
+        local prefix = e.entry.id and string.format(constants.ID_FORMAT,e.entry.id) or ""
         lines[#lines + 1] = prefix .. indent .. e.entry.name .. suffix
     end
     return lines
@@ -192,7 +193,7 @@ function M.entries_to_lines(children, indent_level)
     local indent = string.rep(indent_str, indent_level)
     for _, child in ipairs(children) do
         local suffix = child.type == "directory" and "/" or ""
-        local prefix = child.id and string.format("///%d:", child.id) or ""
+        local prefix = child.id and string.format(constants.ID_FORMAT,child.id) or ""
         lines[#lines + 1] = prefix .. indent .. child.name .. suffix
     end
     return lines
