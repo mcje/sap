@@ -13,6 +13,14 @@ local fs = require("sap.fs")
 ---@field name string
 ---@field type "file"|"directory"
 ---@field parent_path string
+---@field copy_of string?
+
+---@class HiddenEntry
+---@field id integer?
+---@field name string
+---@field type "file"|"directory"
+---@field path string
+---@field line string  -- Raw line for exact restoration
 
 ---@class State
 ---@field root_path string
@@ -24,6 +32,7 @@ local fs = require("sap.fs")
 ---@field pending_deletes table<string, boolean>  -- paths to delete
 ---@field pending_moves table<string, string>  -- original_path -> new_path
 ---@field pending_creates table<string, PendingCreate>  -- path -> create info
+---@field hidden_content table<string, HiddenEntry[]>  -- parent_path -> hidden entries
 local State = {}
 State.__index = State
 
@@ -52,6 +61,7 @@ function State.new(root_path, show_hidden)
     self.pending_deletes = {}
     self.pending_moves = {}
     self.pending_creates = {}
+    self.hidden_content = {}
 
     -- Add root itself as an entry (no parent)
     self:add_entry(root_path, nil)
@@ -242,10 +252,28 @@ end
 ---@param path string
 ---@param entry_type "file"|"directory"
 function State:mark_create(path, entry_type)
+    -- Don't overwrite if already exists with copy_of (preserve copy info)
+    local existing = self.pending_creates[path]
+    if existing and existing.copy_of then
+        return
+    end
     self.pending_creates[path] = {
         name = fs.basename(path),
         type = entry_type,
         parent_path = vim.fs.dirname(path),
+    }
+end
+
+--- Add a pending copy (stored as create with copy source)
+---@param from_path string
+---@param to_path string
+---@param entry_type "file"|"directory"
+function State:mark_copy(from_path, to_path, entry_type)
+    self.pending_creates[to_path] = {
+        name = fs.basename(to_path),
+        type = entry_type,
+        parent_path = vim.fs.dirname(to_path),
+        copy_of = from_path,
     }
 end
 
@@ -324,6 +352,19 @@ function State:set_root(entry)
     self.root_path = entry.path
     self.expanded[entry.path] = true
     entry.parent_path = nil  -- Root has no parent
+
+    -- Load children if not already loaded
+    local has_children = false
+    for _, e in pairs(self.entries) do
+        if e.parent_path == entry.path then
+            has_children = true
+            break
+        end
+    end
+
+    if not has_children then
+        self:load_children(entry.path)
+    end
 end
 
 ---@return boolean? ok
@@ -434,6 +475,71 @@ function State:is_intentionally_hidden(entry)
     end
 
     return false
+end
+
+--- Calculate depth of a path relative to current root
+--- Example: root="/home/user", path="/home/user/foo/bar" → depth=2
+---@param path string
+---@return integer
+function State:get_depth(path)
+    if path == self.root_path then
+        return 0
+    end
+    -- Count path components after root
+    local rel = path:sub(#self.root_path + 2) -- +2 to skip trailing /
+    local depth = 1
+    for _ in rel:gmatch("/") do
+        depth = depth + 1
+    end
+    return depth
+end
+
+--- Save hidden content for a parent path (when collapsing or navigating away)
+---@param parent_path string
+---@param entries HiddenEntry[]
+function State:save_hidden_content(parent_path, entries)
+    self.hidden_content[parent_path] = entries
+end
+
+--- Get hidden content for a parent path
+---@param parent_path string
+---@return HiddenEntry[]?
+function State:get_hidden_content(parent_path)
+    return self.hidden_content[parent_path]
+end
+
+--- Clear hidden content for a parent path (when expanding or content becomes visible)
+---@param parent_path string
+function State:clear_hidden_content(parent_path)
+    self.hidden_content[parent_path] = nil
+end
+
+--- Check if there is hidden content under a path (recursive)
+---@param path string
+---@return boolean
+function State:has_hidden_content_under(path)
+    for parent_path, _ in pairs(self.hidden_content) do
+        if parent_path == path or parent_path:match("^" .. vim.pesc(path) .. "/") then
+            return true
+        end
+    end
+    return false
+end
+
+--- Get all hidden content under a path (recursive, for save)
+---@param path string?
+---@return HiddenEntry[]
+function State:get_all_hidden_content(path)
+    local all = {}
+    path = path or self.root_path
+    for parent_path, entries in pairs(self.hidden_content) do
+        if parent_path == path or parent_path:match("^" .. vim.pesc(path) .. "/") then
+            for _, entry in ipairs(entries) do
+                all[#all + 1] = entry
+            end
+        end
+    end
+    return all
 end
 
 return State

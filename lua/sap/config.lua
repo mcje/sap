@@ -10,6 +10,19 @@ M.defaults = {
         file = "",
     },
 
+    -- Tree guide lines (set to false to disable)
+    guides = {
+        enabled = true,
+        icons = {
+            expanded = "", -- expanded directory indicator
+            collapsed = "", -- collapsed directory indicator
+            middle = "├", -- middle child
+            last = "└", -- last child
+            pipe = "│", -- vertical connector
+            space = " ", -- empty space (no connector)
+        },
+    },
+
     -- Keymaps (set to false to disable all)
     keys = {
         { "<CR>", "<cmd>Sap open<cr>", desc = "Open file / toggle dir" },

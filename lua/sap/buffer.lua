@@ -72,6 +72,7 @@ local function setup_autocmds(bufnr)
         buffer = bufnr,
         callback = function()
             M.states[bufnr] = nil
+            render.line_info[bufnr] = nil
             if sync_timers[bufnr] then
                 sync_timers[bufnr]:stop()
                 sync_timers[bufnr]:close()
@@ -102,7 +103,8 @@ local function setup_autocmds(bufnr)
     })
 
     -- Sync buffer changes to pending edits (debounced)
-    vim.api.nvim_create_autocmd("TextChanged", {
+    -- Handle both normal mode (TextChanged) and insert mode (TextChangedI)
+    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
         buffer = bufnr,
         callback = function()
             debounced_sync(bufnr)
@@ -156,8 +158,8 @@ end
 
 --- Sync buffer edits to state's pending edits
 --- Called on TextChanged to detect deletions, moves, and creates
---- Only updates pending edits for entries that SHOULD be visible (under root, expanded, not hidden)
---- Preserves pending edits for entries outside the current view
+--- Uses INCREMENTAL approach: only updates pending edits for VISIBLE entries
+--- Hidden entries (collapsed, outside root) keep their pending edits unchanged
 ---@param bufnr integer
 function M.sync(bufnr)
     local state = M.states[bufnr]
@@ -168,60 +170,120 @@ function M.sync(bufnr)
     local parsed = parser.parse_buffer(bufnr, state.root_path)
 
     -- Build set of IDs in buffer and their intended paths
-    local buffer_ids = {}
+    -- Collect ALL occurrences (same ID can appear multiple times for copies)
+    local buffer_ids = {}  -- id -> array of parsed entries
     for _, p in ipairs(parsed) do
         if p.id then
-            buffer_ids[p.id] = p
+            if not buffer_ids[p.id] then
+                buffer_ids[p.id] = {}
+            end
+            table.insert(buffer_ids[p.id], p)
         end
     end
 
-    -- Only clear pending edits for entries that SHOULD be visible
-    -- Keep pending edits for entries outside the current root
-    local old_deletes = vim.tbl_extend("force", {}, state.pending_deletes)
-    local old_moves = vim.tbl_extend("force", {}, state.pending_moves)
-    local old_creates = vim.tbl_extend("force", {}, state.pending_creates)
+    -- INCREMENTAL SYNC: Only update pending edits for visible entries
+    -- Hidden entries keep their existing pending edits untouched
 
-    state:clear_pending()
-
-    -- Restore pending edits for entries outside current root
-    for path, _ in pairs(old_deletes) do
-        local entry = state:get_by_path(path)
-        if entry and state:is_intentionally_hidden(entry) then
-            state.pending_deletes[path] = true
-        end
-    end
-    for from_path, to_path in pairs(old_moves) do
-        local entry = state:get_by_path(from_path)
-        if entry and state:is_intentionally_hidden(entry) then
-            state.pending_moves[from_path] = to_path
-        end
-    end
-    for path, create in pairs(old_creates) do
-        -- Check if create's parent is outside root
-        local parent_entry = state:get_by_path(create.parent_path)
-        if parent_entry and state:is_intentionally_hidden(parent_entry) then
-            state.pending_creates[path] = create
-        end
-    end
-
-    -- Check each entry in state against buffer
+    -- Process each entry in state
     for id, entry in pairs(state.entries) do
-        -- Skip entries that are intentionally hidden (outside root, collapsed, hidden)
+        -- Skip hidden entries - don't touch their pending edits
         if state:is_intentionally_hidden(entry) then
             goto continue
         end
 
-        local parsed_entry = buffer_ids[id]
+        -- Skip entries with pending move to a hidden destination
+        -- (e.g., moved to a collapsed directory - we can't see it in buffer)
+        local pending_dest = state.pending_moves[entry.path]
+        if pending_dest then
+            local dest_hidden = state:is_intentionally_hidden({
+                path = pending_dest,
+                hidden = vim.fs.basename(pending_dest):sub(1, 1) == ".",
+            })
+            if dest_hidden then
+                goto continue
+            end
+        end
 
-        if not parsed_entry then
-            -- Entry should be visible but isn't in buffer -> deleted
-            state:mark_delete(entry.path)
-        elseif parsed_entry.path ~= entry.path then
-            -- Path changed -> moved/renamed
-            state:mark_move(entry.path, parsed_entry.path)
+        local parsed_entries = buffer_ids[id] or {}
+
+        if #parsed_entries == 0 then
+            -- Entry not in buffer -> check if there's a pending copy that should become a move
+            local dominated_by_copy = nil
+            for path, create in pairs(state.pending_creates) do
+                if create.copy_of == entry.path then
+                    dominated_by_copy = path
+                    break
+                end
+            end
+
+            if dominated_by_copy then
+                -- Copy becomes a move (original is now gone)
+                state.pending_creates[dominated_by_copy] = nil
+                state.pending_moves[entry.path] = dominated_by_copy
+                state.pending_deletes[entry.path] = nil
+            else
+                -- Plain delete
+                state.pending_moves[entry.path] = nil
+                state.pending_deletes[entry.path] = true
+            end
+        else
+            -- Check if original path is among the occurrences
+            local has_original = false
+            local copy_paths = {}
+            for _, pe in ipairs(parsed_entries) do
+                if pe.path == entry.path then
+                    has_original = true
+                else
+                    table.insert(copy_paths, { path = pe.path, type = entry.type })
+                end
+            end
+
+            if has_original then
+                -- Original still in buffer -> no move/delete
+                state.pending_deletes[entry.path] = nil
+                state.pending_moves[entry.path] = nil
+                -- Extra occurrences are copies -> track as pending creates with copy source
+                -- (so they survive render() and diff.calculate knows they're copies)
+                for _, copy in ipairs(copy_paths) do
+                    state:mark_copy(entry.path, copy.path, copy.type)
+                end
+            elseif #copy_paths > 0 then
+                -- Original not in buffer, but ID appears elsewhere -> move to first
+                state.pending_deletes[entry.path] = nil
+                state.pending_moves[entry.path] = copy_paths[1].path
+                -- Clear any pending copy - it's now a move since original is gone
+                state.pending_creates[copy_paths[1].path] = nil
+                -- Additional occurrences beyond the first are copies of the move destination
+                for i = 2, #copy_paths do
+                    state:mark_copy(copy_paths[1].path, copy_paths[i].path, copy_paths[i].type)
+                end
+            end
         end
 
         ::continue::
+    end
+
+    -- Handle pending creates for visible paths
+    -- Remove creates that are visible but no longer in buffer
+    for path, _ in pairs(state.pending_creates) do
+        local fake_entry = {
+            path = path,
+            hidden = vim.fs.basename(path):sub(1, 1) == ".",
+        }
+        if not state:is_intentionally_hidden(fake_entry) then
+            -- This create path is visible - check if still in buffer
+            -- Check for ANY line at this path (with or without ID - copies have IDs)
+            local found = false
+            for _, p in ipairs(parsed) do
+                if p.path == path then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                state.pending_creates[path] = nil
+            end
+        end
     end
 
     -- Check for new entries (lines without IDs)
@@ -231,6 +293,12 @@ function M.sync(bufnr)
             state:mark_create(p.path, p.type)
         end
     end
+
+    -- Update line_info for guides based on current buffer structure
+    render.update_line_info_from_parsed(bufnr, parsed, state)
+
+    -- Force full redraw to update guide decorations
+    vim.cmd("redraw!")
 end
 
 local function format_path(path, ftype)
@@ -297,6 +365,24 @@ local function apply_changes(changes)
     return errors
 end
 
+--- Convert hidden content to ParsedEntry format for diff calculation
+---@param hidden HiddenEntry[]
+---@return ParsedEntry[]
+local function hidden_to_parsed(hidden)
+    local result = {}
+    for _, h in ipairs(hidden) do
+        result[#result + 1] = {
+            id = h.id,
+            path = h.path,
+            name = h.name,
+            type = h.type,
+            indent = 0,  -- Not used for diff
+            linenr = 0,  -- Not in visible buffer
+        }
+    end
+    return result
+end
+
 ---@param bufnr integer
 function M.save(bufnr)
     local state = M.states[bufnr]
@@ -304,7 +390,20 @@ function M.save(bufnr)
         return
     end
 
+    -- Sync immediately to ensure pending state is up to date
+    -- (debounced sync might not have run yet)
+    M.sync(bufnr)
+
+    -- Get visible entries from buffer
     local parsed = parser.parse_buffer(bufnr, state.root_path)
+
+    -- Add hidden entries (collapsed directories, etc.)
+    local hidden = state:get_all_hidden_content()
+    local hidden_parsed = hidden_to_parsed(hidden)
+    for _, hp in ipairs(hidden_parsed) do
+        parsed[#parsed + 1] = hp
+    end
+
     local changes = diff.calculate(state, parsed)
 
     if diff.is_empty(changes) then
@@ -338,7 +437,7 @@ end
 
 ---@param bufnr integer
 ---@param linenr integer (1-indexed)
----@return Entry?
+---@return Entry|ParsedEntry|nil
 function M.get_entry_at_line(bufnr, linenr)
     local state = M.states[bufnr]
     if not state then
@@ -351,11 +450,21 @@ function M.get_entry_at_line(bufnr, linenr)
     end
 
     local id = parser.parse_line(lines[1])
-    if not id then
-        return nil
+    if id then
+        return state:get_by_id(id)
     end
 
-    return state:get_by_id(id)
+    -- No ID - parse buffer to compute path for new entries
+    local parsed = parser.parse_buffer(bufnr, state.root_path)
+    for _, p in ipairs(parsed) do
+        if p.linenr == linenr then
+            -- Populate Entry-compatible fields
+            p.parent_path = vim.fs.dirname(p.path)
+            p.hidden = p.name:sub(1, 1) == "."
+            return p
+        end
+    end
+    return nil
 end
 
 function M.close(bufnr)
@@ -366,6 +475,17 @@ function M.close(bufnr)
     else
         vim.cmd("enew")
     end
+end
+
+--- Clear undo history for buffer (prevents undoing past structural changes)
+---@param bufnr integer
+function M.clear_undo(bufnr)
+    local old_undolevels = vim.bo[bufnr].undolevels
+    vim.bo[bufnr].undolevels = -1
+    -- Make a no-op change to create undo break
+    local line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+    vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { line })
+    vim.bo[bufnr].undolevels = old_undolevels
 end
 
 return M
