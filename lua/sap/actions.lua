@@ -1,7 +1,7 @@
 local buffer = require("sap.buffer")
 local render = require("sap.render")
 local parser = require("sap.parser")
-local opts = require("sap.config").options
+local config = require("sap.config")
 
 local M = {}
 
@@ -88,7 +88,7 @@ function M.set_root()
     end
 
     -- Block if save_scope is "view" and there are unsaved changes
-    if opts.save_scope == "view" and buffer.has_unsaved_changes(bufnr) then
+    if config.options.save_scope == "view" and buffer.has_unsaved_changes(bufnr) then
         vim.notify("sap: save changes before navigating (:w)", vim.log.levels.WARN)
         return
     end
