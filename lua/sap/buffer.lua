@@ -167,31 +167,42 @@ local function confirm_changes(changes)
     return choice == 1
 end
 
+---@class ApplyResult
+---@field succeeded string[]  -- descriptions of successful operations
+---@field error string?       -- first error encountered, nil if all succeeded
+
+--- Apply filesystem changes, stopping on first error
+---@param changes Changes
+---@return ApplyResult
 local function apply_changes(changes)
-    local errors = {}
+    local succeeded = {}
 
     -- Order: create -> copy -> move -> delete
     for _, c in ipairs(changes.creates) do
         local ok, err = fs.create(c.path, c.type == "directory")
         if not ok then
-            errors[#errors + 1] = "create " .. c.path .. ": " .. err
+            return { succeeded = succeeded, error = "create " .. c.path .. ": " .. err }
         end
+        succeeded[#succeeded + 1] = "created " .. format_path(c.path, c.type)
     end
 
     for _, c in ipairs(changes.copies) do
         local ok, err = fs.copy(c.from, c.to)
         if not ok then
-            errors[#errors + 1] = "copy " .. c.from .. ": " .. err
+            return { succeeded = succeeded, error = "copy " .. c.from .. ": " .. err }
         end
+        succeeded[#succeeded + 1] = "copied " .. format_path(c.from, c.type)
     end
 
     for _, m in ipairs(changes.moves) do
         local ok, err = fs.move(m.from, m.to)
         if not ok then
-            errors[#errors + 1] = "move " .. m.from .. ": " .. err
+            return { succeeded = succeeded, error = "move " .. m.from .. ": " .. err }
         end
+        succeeded[#succeeded + 1] = "moved " .. format_path(m.from, m.type)
     end
 
+    local delete_verb = config.options.delete_method == "trash" and "trashed" or "deleted"
     for _, d in ipairs(changes.deletes) do
         local ok, err
         if config.options.delete_method == "trash" then
@@ -200,11 +211,12 @@ local function apply_changes(changes)
             ok, err = fs.remove(d.path)
         end
         if not ok then
-            errors[#errors + 1] = "delete " .. d.path .. ": " .. err
+            return { succeeded = succeeded, error = "delete " .. d.path .. ": " .. err }
         end
+        succeeded[#succeeded + 1] = delete_verb .. " " .. format_path(d.path, d.type)
     end
 
-    return errors
+    return { succeeded = succeeded, error = nil }
 end
 
 --- Convert cached content to ParsedEntry format for diff calculation
@@ -258,17 +270,22 @@ local cached = state:get_all_cached_content("")
         return
     end
 
-    local errors = apply_changes(changes)
+    local result = apply_changes(changes)
 
-    if #errors > 0 then
-        for _, e in ipairs(errors) do
-            vim.notify("sap: " .. e, vim.log.levels.ERROR)
-        end
+    -- Report what succeeded
+    for _, msg in ipairs(result.succeeded) do
+        vim.notify("sap: " .. msg, vim.log.levels.INFO)
     end
 
-    -- Refresh state and re-render
-    state:refresh()
-    render.render(bufnr, state, { clear_undo = true })
+    if result.error then
+        -- Error occurred - report it and don't refresh (buffer still shows remaining changes)
+        vim.notify("sap: " .. result.error, vim.log.levels.ERROR)
+        vim.notify("sap: stopped, buffer shows remaining changes", vim.log.levels.WARN)
+    else
+        -- All succeeded - refresh state and re-render
+        state:refresh()
+        render.render(bufnr, state, { clear_undo = true })
+    end
 end
 
 ---@param bufnr integer
