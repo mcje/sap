@@ -12,7 +12,8 @@ A tree-style file manager for Neovim. Edit the buffer to rename, move, copy, cre
 ```lua
 -- lazy.nvim
 {
-    "username/sap.nvim",
+    "mcje/sap.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" }, -- optional, for file icons
     opts = {},
     keys = {
         { "-", "<cmd>Sap<cr>", desc = "Open file manager" },
