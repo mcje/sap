@@ -10,14 +10,11 @@ A tree-style file manager for Neovim. Edit the buffer to rename, move, copy, cre
 ## Installation
 
 ```lua
--- lazy.nvim
+-- lazy.nvim (minimal)
 {
     "mcje/sap.nvim",
     dependencies = { "nvim-tree/nvim-web-devicons" }, -- optional, for file icons
-    opts = {},
-    keys = {
-        { "-", "<cmd>Sap<cr>", desc = "Open file manager" },
-    },
+    keys = { { "-", "<cmd>Sap<cr>", desc = "Open file manager" } },
 }
 ```
 
@@ -53,12 +50,20 @@ Edit the buffer, then `:w` to apply changes:
 ## Configuration
 
 ```lua
-require("sap").setup({
-    show_hidden = false,
-    indent_size = 4,
-    delete_method = "trash",  -- "trash" or "permanent"
-    save_scope = "global",    -- "global" or "view"
-})
+{
+    "mcje/sap.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    opts = {
+        show_hidden = false,
+        indent_size = 4,
+        delete_method = "trash",  -- "trash" or "permanent"
+        save_scope = "global",    -- "global" or "view"
+        -- buffer_keymaps = {},  -- set to override all default buffer keymaps
+    },
+    keys = {
+        { "-", "<cmd>Sap<cr>", desc = "Open file manager" },
+    },
+}
 ```
 
 See [config.lua](lua/sap/config.lua) for all options.

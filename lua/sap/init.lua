@@ -47,8 +47,8 @@ M.open = function(path)
     end, { nargs = 1, range = true })
 
     -- Set keymaps
-    if config.options.keys then
-        for _, km in ipairs(config.options.keys) do
+    if config.options.buffer_keymaps then
+        for _, km in ipairs(config.options.buffer_keymaps) do
             local mode = km.mode or "n"
             vim.keymap.set(mode, km[1], km[2], { buffer = bufnr, desc = km.desc })
         end

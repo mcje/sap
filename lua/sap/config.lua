@@ -33,8 +33,8 @@ M.defaults = {
         },
     },
 
-    -- Keymaps (set to false to disable all)
-    keys = {
+    -- Buffer-local keymaps (set to false to disable all)
+    buffer_keymaps = {
         { "<CR>", "<cmd>Sap open<cr>", desc = "Open file / toggle dir" },
         { "<BS>", "<cmd>Sap parent<cr>", desc = "Go to parent" },
         { "<C-CR>", "<cmd>Sap set_root<cr>", desc = "Set as root" },
