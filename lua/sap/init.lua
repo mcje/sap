@@ -17,7 +17,6 @@ M.open = function(path)
     end
 
     -- Buffer commands
-    -- TODO: maybe move to buffer.lua
     vim.api.nvim_buf_create_user_command(bufnr, "Sap", function(opts)
         local cmd = opts.fargs[1]
         if cmd == "open" then

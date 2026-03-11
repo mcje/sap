@@ -838,6 +838,15 @@ function M.set_root(bufnr, state, entry)
     local new_line_count = vim.api.nvim_buf_line_count(bufnr)
     M.shift_lines(bufnr, 1, new_line_count, -entry_indent)
 
+    -- If directory was collapsed (no children in buffer), expand it now
+    if new_line_count == 1 then
+        local children = state:get_children(entry.path)
+        if #children > 0 then
+            local child_lines = M.entries_to_lines(children, get_indent_size())
+            vim.api.nvim_buf_set_lines(bufnr, 1, 1, false, child_lines)
+        end
+    end
+
     -- Update line_info for guides
     parsed = parser.parse_buffer(bufnr, state.root_path)
     M.update_line_info_from_parsed(bufnr, parsed, state)
