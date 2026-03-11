@@ -148,7 +148,7 @@ end
 ---@return boolean? success
 ---@return string? error
 M.copy = function(old_path, new_path)
-    local stat = uv.fs_stat(old_path)
+    local stat = uv.fs_lstat(old_path)
     if not stat then
         return nil, "source not found"
     end
