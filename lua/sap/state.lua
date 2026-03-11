@@ -115,6 +115,8 @@ end
 function State:get_children(parent_path)
     local children = {}
 
+    -- PERF: O(n) scan. Could use parent_path -> entries index, but linear scan is
+    -- fast enough for typical sizes and the sort below dominates anyway.
     for _, entry in pairs(self.entries) do
         -- Check if parent matches
         if entry.parent_path ~= parent_path then

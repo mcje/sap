@@ -41,6 +41,57 @@ local function strip_id_prefixes(lines)
     return clean
 end
 
+--- Validate parsed entries before save
+---@param parsed ParsedEntry[]
+---@return string[] errors
+local function validate_entries(parsed)
+    local errors = {}
+
+    -- Track names per directory for duplicate detection
+    local names_in_dir = {}  -- parent_path -> { name -> linenr }
+
+    for _, p in ipairs(parsed) do
+        local parent = vim.fs.dirname(p.path)
+
+        -- Empty name
+        if p.name == "" then
+            errors[#errors + 1] = string.format("line %d: empty filename", p.linenr)
+            goto continue
+        end
+
+        -- Reserved names
+        if p.name == "." or p.name == ".." then
+            errors[#errors + 1] = string.format("line %d: '%s' is a reserved name", p.linenr, p.name)
+            goto continue
+        end
+
+        -- Invalid characters (/ and NUL are forbidden in filenames)
+        if p.name:find("/") then
+            errors[#errors + 1] = string.format("line %d: filename cannot contain '/'", p.linenr)
+            goto continue
+        end
+        if p.name:find("%z") then
+            errors[#errors + 1] = string.format("line %d: filename cannot contain NUL character", p.linenr)
+            goto continue
+        end
+
+        -- Duplicate names in same directory
+        names_in_dir[parent] = names_in_dir[parent] or {}
+        if names_in_dir[parent][p.name] then
+            errors[#errors + 1] = string.format(
+                "line %d: duplicate name '%s' (also on line %d)",
+                p.linenr, p.name, names_in_dir[parent][p.name]
+            )
+        else
+            names_in_dir[parent][p.name] = p.linenr
+        end
+
+        ::continue::
+    end
+
+    return errors
+end
+
 render.setup_highlights()
 render.setup_decoration_provider(M.states)
 
@@ -178,7 +229,8 @@ function M.create(path)
     setup_buffer_options(bufnr, bufname)
     setup_autocmds(bufnr)
 
-    render.render(bufnr, state, { clear_undo = true })
+    render.render(bufnr, state)
+    M.clear_undo(bufnr)
 
     return bufnr
 end
@@ -306,11 +358,21 @@ function M.save(bufnr)
     if config.options.save_scope == "global" then
         -- Pass "/" to get ALL cached content, not just under current root
         -- HACK: "" matches all absolute paths (pattern becomes "^/")
-local cached = state:get_all_cached_content("")
+        local cached = state:get_all_cached_content("")
         local cached_parsed = cached_to_parsed(cached)
         for _, cp in ipairs(cached_parsed) do
             parsed[#parsed + 1] = cp
         end
+    end
+
+    -- Validate entries before calculating diff
+    local validation_errors = validate_entries(parsed)
+    if #validation_errors > 0 then
+        vim.notify("sap: invalid entries", vim.log.levels.ERROR)
+        for _, err in ipairs(validation_errors) do
+            vim.notify("  " .. err, vim.log.levels.ERROR)
+        end
+        return
     end
 
     local changes = diff.calculate(state, parsed)
@@ -339,7 +401,8 @@ local cached = state:get_all_cached_content("")
     else
         -- All succeeded - refresh state and re-render
         state:refresh()
-        render.render(bufnr, state, { clear_undo = true })
+        render.render(bufnr, state)
+        M.clear_undo(bufnr)
     end
 end
 

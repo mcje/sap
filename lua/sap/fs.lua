@@ -69,8 +69,7 @@ end
 ---@return boolean? success
 ---@return string? error
 M.remove = function(path)
-    -- TODO: handle symlinks
-    local stat = uv.fs_stat(path)
+    local stat = uv.fs_lstat(path)
     if not stat then
         return nil, "file not found"
     end
@@ -129,6 +128,8 @@ M.trash = function(path, trash_dir)
     local trash_path = trash_dir .. path
 
     -- Handle collision with timestamp suffix
+    -- TODO: This can still collide if same file is trashed 3+ times in one second.
+    -- Fix: use hrtime() for nanosecond precision, or loop with random suffix.
     if uv.fs_stat(trash_path) then
         trash_path = trash_path .. "." .. os.time()
     end

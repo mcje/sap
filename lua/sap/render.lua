@@ -402,23 +402,10 @@ function M.update_line_info_from_parsed(bufnr, parsed, state)
     visit("__ROOT__", 0, {})
 end
 
---- Clear undo history (prevent undoing past render)
----@param bufnr integer
-local function clear_undo(bufnr)
-    local old_undolevels = vim.bo[bufnr].undolevels
-    vim.bo[bufnr].undolevels = -1
-    -- Make a no-op change to create undo break
-    local line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
-    vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { line })
-    vim.bo[bufnr].undolevels = old_undolevels
-end
-
 --- Full render: flatten, write lines (decoration provider handles extmarks)
 ---@param bufnr integer
 ---@param state State
----@param opts? { clear_undo: boolean }
-function M.render(bufnr, state, opts)
-    opts = opts or {}
+function M.render(bufnr, state)
     local entries = M.flatten(state)
     local lines = M.to_lines(entries)
 
@@ -436,10 +423,6 @@ function M.render(bufnr, state, opts)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 
     vim.bo[bufnr].modified = false
-
-    if opts.clear_undo then
-        clear_undo(bufnr)
-    end
 end
 
 --- Find line number of an entry by ID
@@ -602,12 +585,12 @@ function M.expand(bufnr, state, entry)
 end
 
 --- Shift indentation of all lines in a range
+--- Shift indentation of lines while preserving ID prefix
 ---@param bufnr integer
 ---@param start_line integer (1-indexed)
 ---@param end_line integer (1-indexed)
 ---@param delta integer (positive = indent, negative = unindent)
-local function shift_lines_indent(bufnr, start_line, end_line, delta)
-    local indent_size = get_indent_size()
+function M.shift_lines(bufnr, start_line, end_line, delta)
     for lnum = start_line, end_line do
         local line = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1]
         if line and line ~= "" then
@@ -657,7 +640,7 @@ function M.go_to_parent(bufnr, state)
     if cached and (cached.before or cached.after) then
         -- Restore from cache with before/after structure (from set_root)
         local indent_size = get_indent_size()
-        shift_lines_indent(bufnr, 1, old_line_count, indent_size)
+        M.shift_lines(bufnr, 1, old_line_count, indent_size)
 
         -- Extract lines from before/after entries
         local before_lines = {}
@@ -702,7 +685,7 @@ function M.go_to_parent(bufnr, state)
     else
         -- No cached content - generate fresh from state
         local indent_size = get_indent_size()
-        shift_lines_indent(bufnr, 1, old_line_count, indent_size)
+        M.shift_lines(bufnr, 1, old_line_count, indent_size)
 
         local new_root_entry = state:get_by_path(new_root_path)
         local siblings = state:get_children(new_root_path)
@@ -853,10 +836,10 @@ function M.set_root(bufnr, state, entry)
 
     -- Shift all remaining lines to reduce indent
     local new_line_count = vim.api.nvim_buf_line_count(bufnr)
-    shift_lines_indent(bufnr, 1, new_line_count, -entry_indent)
+    M.shift_lines(bufnr, 1, new_line_count, -entry_indent)
 
     -- Update line_info for guides
-    local parsed = parser.parse_buffer(bufnr, state.root_path)
+    parsed = parser.parse_buffer(bufnr, state.root_path)
     M.update_line_info_from_parsed(bufnr, parsed, state)
 
     return true

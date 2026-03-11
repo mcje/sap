@@ -1,5 +1,6 @@
 local buffer = require("sap.buffer")
 local render = require("sap.render")
+local parser = require("sap.parser")
 local opts = require("sap.config").options
 
 local M = {}
@@ -174,26 +175,6 @@ function M.collapse()
     vim.api.nvim_win_set_cursor(0, { linenr, vim.fn.col(".") - 1 })
 end
 
--- Helper for indent/unindent
-local function shift_lines(bufnr, start_line, end_line, delta)
-    for lnum = start_line, end_line do
-        local line = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1]
-        local prefix_end = line:find(":") or 0
-        local before = line:sub(1, prefix_end)
-        local after = line:sub(prefix_end + 1)
-
-        local new_line
-        if delta > 0 then
-            new_line = before .. string.rep(" ", delta) .. after
-        else
-            local spaces = math.min(-delta, #(after:match("^%s*") or ""))
-            new_line = before .. after:sub(spaces + 1)
-        end
-
-        vim.api.nvim_buf_set_lines(bufnr, lnum - 1, lnum, false, { new_line })
-    end
-end
-
 --- Indent lines (normal or visual mode)
 ---@param visual boolean
 function M.indent(visual)
@@ -209,7 +190,7 @@ function M.indent(visual)
             end_line = start_line
         end
 
-        shift_lines(bufnr, start_line, end_line, vim.bo.shiftwidth)
+        render.shift_lines(bufnr, start_line, end_line, vim.bo.shiftwidth)
     end
 end
 
@@ -228,7 +209,7 @@ function M.unindent(visual)
             end_line = start_line
         end
 
-        shift_lines(bufnr, start_line, end_line, -vim.bo.shiftwidth)
+        render.shift_lines(bufnr, start_line, end_line, -vim.bo.shiftwidth)
     end
 end
 
