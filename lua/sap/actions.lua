@@ -1,7 +1,5 @@
 local buffer = require("sap.buffer")
-local parser = require("sap.parser")
 local render = require("sap.render")
-local diff = require("sap.diff")
 local opts = require("sap.config").options
 
 local M = {}
@@ -12,16 +10,6 @@ local function get_context()
     local state = buffer.get_state(bufnr)
     local entry = buffer.get_entry_at_line(bufnr, linenr)
     return bufnr, linenr, state, entry
-end
-
---- Check if buffer has unsaved changes (visible entries differ from state)
----@param bufnr integer
----@param state State
----@return boolean
-local function has_unsaved_changes(bufnr, state)
-    local parsed = parser.parse_buffer(bufnr, state.root_path)
-    local changes = diff.calculate(state, parsed)
-    return not diff.is_empty(changes)
 end
 
 --- Open file or toggle directory
@@ -99,7 +87,7 @@ function M.set_root()
     end
 
     -- Block if save_scope is "view" and there are unsaved changes
-    if opts.save_scope == "view" and has_unsaved_changes(bufnr, state) then
+    if opts.save_scope == "view" and buffer.has_unsaved_changes(bufnr) then
         vim.notify("sap: save changes before navigating (:w)", vim.log.levels.WARN)
         return
     end
@@ -136,7 +124,7 @@ function M.toggle_hidden()
         return
     end
 
-    if has_unsaved_changes(bufnr, state) then
+    if buffer.has_unsaved_changes(bufnr) then
         vim.notify("sap: save changes before toggling hidden (:w)", vim.log.levels.WARN)
         return
     end

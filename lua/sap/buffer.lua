@@ -326,8 +326,37 @@ function M.get_entry_at_line(bufnr, linenr)
     return nil
 end
 
+--- Check if buffer has unsaved changes (always includes cached/global changes)
+---@param bufnr integer
+---@return boolean
+function M.has_unsaved_changes(bufnr)
+    local state = M.states[bufnr]
+    if not state then
+        return false
+    end
+    local parsed = parser.parse_buffer(bufnr, state.root_path)
+
+    -- Always include cached content (collapsed dirs, outside root)
+    local cached = state:get_all_cached_content("")
+    local cached_parsed = cached_to_parsed(cached)
+    for _, cp in ipairs(cached_parsed) do
+        parsed[#parsed + 1] = cp
+    end
+
+    local changes = diff.calculate(state, parsed)
+    return not diff.is_empty(changes)
+end
+
 function M.close(bufnr)
     bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+    if M.has_unsaved_changes(bufnr) then
+        local choice = vim.fn.confirm("Unsaved changes. Close anyway?", "&Yes\n&No", 2)
+        if choice ~= 1 then
+            return
+        end
+    end
+
     local alt = vim.fn.bufnr("#")
     if alt > 0 and alt ~= bufnr and vim.fn.buflisted(alt) == 1 then
         vim.api.nvim_set_current_buf(alt)
