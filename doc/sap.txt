@@ -188,6 +188,28 @@ indent_size ~
 
     Number of spaces per indentation level in the tree view.
 
+                                                      *sap-config-delete_method*
+delete_method ~
+    Type: string
+    Default: `"trash"`
+
+    How to handle deleted files. Options:
+    - `"trash"`: Move files to `trash_dir` (recoverable)
+    - `"permanent"`: Delete files permanently
+
+                                                          *sap-config-trash_dir*
+trash_dir ~
+    Type: string
+    Default: `vim.fn.stdpath("data") .. "/sap/trash"`
+
+    Directory for trashed files when `delete_method = "trash"`. Files are
+    stored preserving their original directory structure. For example,
+    deleting `/home/user/project/foo.txt` creates:
+    `~/.local/share/nvim/sap/trash/home/user/project/foo.txt`
+
+    If a file with the same name already exists in trash, a timestamp
+    suffix is added (e.g., `foo.txt.1710123456`).
+
                                                               *sap-config-icons*
 icons ~
     Type: table

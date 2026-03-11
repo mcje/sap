@@ -7,6 +7,10 @@ M.defaults = {
     -- "view" = save current view only, "global" = include all cached content
     save_scope = "global",
 
+    -- "trash" = move to trash_dir, "permanent" = delete permanently
+    delete_method = "trash",
+    trash_dir = vim.fn.stdpath("data") .. "/sap/trash",
+
     icons = {
         use_devicons = true,
         directory = "",

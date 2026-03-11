@@ -112,6 +112,35 @@ M.move = function(old_path, new_path)
     return uv.fs_rename(old_path, new_path)
 end
 
+--- Move a file or directory to trash
+--- Preserves directory structure: trash_dir/original/path/file
+--- Adds timestamp suffix on collision
+---@param path string
+---@param trash_dir string
+---@return boolean? success
+---@return string? error
+M.trash = function(path, trash_dir)
+    local stat = uv.fs_stat(path)
+    if not stat then
+        return nil, "file not found"
+    end
+
+    -- Build trash path mirroring original structure
+    local trash_path = trash_dir .. path
+
+    -- Handle collision with timestamp suffix
+    if uv.fs_stat(trash_path) then
+        trash_path = trash_path .. "." .. os.time()
+    end
+
+    -- Create parent directories
+    local parent = fs.dirname(trash_path)
+    vim.fn.mkdir(parent, "p")
+
+    -- Move to trash
+    return uv.fs_rename(path, trash_path)
+end
+
 --- Copy a file or directory
 ---@param old_path string
 ---@param new_path string

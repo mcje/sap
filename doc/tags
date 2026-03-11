@@ -1,10 +1,12 @@
 :Sap	sap.txt	/*:Sap*
 sap-commands	sap.txt	/*sap-commands*
+sap-config-delete_method	sap.txt	/*sap-config-delete_method*
 sap-config-guides	sap.txt	/*sap-config-guides*
 sap-config-icons	sap.txt	/*sap-config-icons*
 sap-config-indent_size	sap.txt	/*sap-config-indent_size*
 sap-config-keys	sap.txt	/*sap-config-keys*
 sap-config-show_hidden	sap.txt	/*sap-config-show_hidden*
+sap-config-trash_dir	sap.txt	/*sap-config-trash_dir*
 sap-configuration	sap.txt	/*sap-configuration*
 sap-contents	sap.txt	/*sap-contents*
 sap-highlights	sap.txt	/*sap-highlights*

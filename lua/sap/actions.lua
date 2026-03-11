@@ -129,11 +129,15 @@ function M.refresh()
 end
 
 --- Toggle hidden files visibility
---- TODO: This does a full re-render, losing any unsaved edits.
---- Should be made surgical like collapse/expand.
+--- TODO: Make surgical like collapse/expand instead of blocking
 function M.toggle_hidden()
     local bufnr, _, state, _ = get_context()
     if not state then
+        return
+    end
+
+    if has_unsaved_changes(bufnr, state) then
+        vim.notify("sap: save changes before toggling hidden (:w)", vim.log.levels.WARN)
         return
     end
 

@@ -153,8 +153,9 @@ local function confirm_changes(changes)
     for _, m in ipairs(changes.moves) do
         lines[#lines + 1] = "  [MOVE] " .. format_path(m.from, m.type) .. " -> " .. format_path(m.to, m.type)
     end
+    local delete_label = config.options.delete_method == "trash" and "[TRASH]" or "[DELETE]"
     for _, d in ipairs(changes.deletes) do
-        lines[#lines + 1] = "  [DELETE] " .. format_path(d.path, d.type)
+        lines[#lines + 1] = "  " .. delete_label .. " " .. format_path(d.path, d.type)
     end
 
     if #lines == 0 then
@@ -192,7 +193,12 @@ local function apply_changes(changes)
     end
 
     for _, d in ipairs(changes.deletes) do
-        local ok, err = fs.remove(d.path)
+        local ok, err
+        if config.options.delete_method == "trash" then
+            ok, err = fs.trash(d.path, config.options.trash_dir)
+        else
+            ok, err = fs.remove(d.path)
+        end
         if not ok then
             errors[#errors + 1] = "delete " .. d.path .. ": " .. err
         end
