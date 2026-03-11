@@ -11,10 +11,12 @@ local ns_icons = vim.api.nvim_create_namespace("sap_icons")  -- Separate namespa
 ---@type table<integer, table<integer, { guide: string, is_expanded: boolean?, is_dir: boolean }>>
 M.line_info = {}
 
+---@return integer
 local function get_indent_size()
     return config.options.indent_size or 4
 end
 
+---@return string
 local function get_indent()
     return string.rep(" ", get_indent_size())
 end

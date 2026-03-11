@@ -5,6 +5,10 @@ local config = require("sap.config")
 
 local M = {}
 
+---@return integer bufnr
+---@return integer linenr
+---@return State? state
+---@return Entry? entry
 local function get_context()
     local bufnr = vim.api.nvim_get_current_buf()
     local linenr = vim.api.nvim_win_get_cursor(0)[1]

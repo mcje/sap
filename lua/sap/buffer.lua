@@ -89,6 +89,8 @@ end
 render.setup_highlights()
 render.setup_decoration_provider(M.states)
 
+---@param bufnr integer
+---@param bufname string
 local function setup_buffer_options(bufnr, bufname)
     vim.api.nvim_buf_set_name(bufnr, bufname)
     vim.bo[bufnr].buftype = "acwrite"
@@ -102,6 +104,7 @@ local function setup_buffer_options(bufnr, bufname)
     end)
 end
 
+---@param bufnr integer
 local function setup_autocmds(bufnr)
     -- Window options when buffer displayed
     vim.api.nvim_create_autocmd("BufWinEnter", {

@@ -54,7 +54,8 @@ M.defaults = {
 
 M.options = vim.deepcopy(M.defaults)
 
-function M.setup(opts)
+---@param opts table?
+M.setup = function(opts)
     M.options = vim.tbl_deep_extend("force", {}, M.defaults, opts or {})
 end
 
