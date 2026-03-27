@@ -1,5 +1,6 @@
 local buffer = require("sap.buffer")
 local config = require("sap.config")
+local fs = require("sap.fs")
 
 local M = {}
 
@@ -35,6 +36,47 @@ function M.open(opts)
     M.setup_keymaps(bufnr)
 
     vim.api.nvim_set_current_buf(bufnr)
+
+    -- In save mode, highlight and jump to suggested file if it exists
+    if opts.mode == "save" and opts.initial_path then
+        M.highlight_suggested(bufnr, opts.initial_path)
+    end
+end
+
+--- Highlight the suggested save file and move cursor to it
+---@param bufnr integer
+---@param initial_path string
+function M.highlight_suggested(bufnr, initial_path)
+    local state = buffer.get_state(bufnr)
+    if not state then
+        return
+    end
+
+    local target_name = vim.fs.basename(initial_path)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local parser = require("sap.parser")
+
+    for i, line in ipairs(lines) do
+        local id = parser.parse_line(line)
+        if id then
+            local entry = state:get_by_id(id)
+            if entry and entry.name == target_name then
+                -- Store the suggested entry ID for later detection
+                state.suggested_entry_id = id
+
+                -- Move cursor to this line
+                vim.api.nvim_win_set_cursor(0, { i, 0 })
+
+                -- Add virtual text indicator
+                local ns = vim.api.nvim_create_namespace("sap_picker_suggested")
+                vim.api.nvim_buf_set_extmark(bufnr, ns, i - 1, 0, {
+                    virt_text = { { " ← save here", "Comment" } },
+                    virt_text_pos = "eol",
+                })
+                return
+            end
+        end
+    end
 end
 
 --- Setup picker keymaps for a buffer
@@ -83,18 +125,16 @@ function M.confirm()
         return
     end
 
-    -- If there are unsaved filesystem changes, apply them first
-    if buffer.has_unsaved_changes(bufnr) then
-        vim.notify("sap picker: applying filesystem changes first...", vim.log.levels.INFO)
-        vim.cmd("write")
-        -- User will need to press <CR> again after save completes
+    local opts = state.picker_opts
+
+    -- Save mode has special handling
+    if opts.mode == "save" then
+        M.confirm_save(bufnr, state, entry, opts)
         return
     end
 
-    local opts = state.picker_opts
+    -- Open/open_dir modes: use marked entries or cursor entry
     local marked = state:get_marked_entries()
-
-    -- If nothing marked, use current entry
     if #marked == 0 and entry then
         marked = { entry }
     end
@@ -104,7 +144,7 @@ function M.confirm()
         return
     end
 
-    -- Validate based on mode
+    -- Validate and collect paths
     local paths = {}
     for _, e in ipairs(marked) do
         if opts.mode == "open_dir" and e.type ~= "directory" then
@@ -114,20 +154,155 @@ function M.confirm()
         paths[#paths + 1] = e.path
     end
 
-    -- Save mode: if directory selected, prompt for filename
-    if opts.mode == "save" and #paths == 1 then
-        local e = marked[1]
-        if e.type == "directory" then
-            M.save_input(e.path, opts.initial_path, function(filename)
-                if filename and filename ~= "" then
-                    M.finish({ e.path .. "/" .. filename }, opts, bufnr)
-                end
-            end)
+    M.finish(paths, opts, bufnr)
+end
+
+--- Show floating confirmation dialog
+---@param prompt string
+---@param callback function(confirmed: boolean)
+local function confirm_dialog(prompt, callback)
+    local buf = vim.api.nvim_create_buf(false, true)
+    local width = math.max(#prompt + 4, 24)
+    local height = 1
+
+    local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor",
+        width = width,
+        height = height,
+        row = math.floor((vim.o.lines - height) / 2),
+        col = math.floor((vim.o.columns - width) / 2),
+        style = "minimal",
+        border = "rounded",
+        title = " " .. prompt .. " ",
+        title_pos = "center",
+    })
+
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "  [Y]es  [N]o" })
+    vim.bo[buf].buftype = "nofile"
+    vim.bo[buf].modifiable = false
+
+    local closed = false
+    local function close(result)
+        if closed then
             return
+        end
+        closed = true
+        if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
+        end
+        vim.schedule(function()
+            callback(result)
+        end)
+    end
+
+    vim.keymap.set("n", "y", function() close(true) end, { buffer = buf })
+    vim.keymap.set("n", "Y", function() close(true) end, { buffer = buf })
+    vim.keymap.set("n", "n", function() close(false) end, { buffer = buf })
+    vim.keymap.set("n", "N", function() close(false) end, { buffer = buf })
+    vim.keymap.set("n", "<CR>", function() close(true) end, { buffer = buf })
+    vim.keymap.set("n", "<Esc>", function() close(false) end, { buffer = buf })
+    vim.keymap.set("n", "q", function() close(false) end, { buffer = buf })
+
+    vim.api.nvim_create_autocmd("BufLeave", {
+        buffer = buf,
+        once = true,
+        callback = function()
+            close(false)
+        end,
+    })
+end
+
+--- Ensure file exists (create empty if needed, including parent dirs)
+---@param path string
+local function ensure_file_exists(path)
+    if vim.fn.filereadable(path) == 1 then
+        return
+    end
+    -- Create parent directories
+    local parent = vim.fs.dirname(path)
+    if vim.fn.isdirectory(parent) == 0 then
+        vim.fn.mkdir(parent, "p")
+    end
+    -- Create empty file
+    fs.create(path, false)
+end
+
+--- Confirm save mode selection
+---@param bufnr integer
+---@param state State
+---@param entry Entry?
+---@param opts PickerOpts
+function M.confirm_save(bufnr, state, entry, opts)
+    -- Determine what's selected: marked entry takes priority, then cursor entry
+    local marked = state:get_marked_entries()
+    local selection = marked[1] or entry
+
+    if not selection then
+        vim.notify("sap picker: nothing selected", vim.log.levels.WARN)
+        return
+    end
+
+    -- Case 1: Directory selected → prompt for filename
+    if selection.type == "directory" then
+        local save_dir = selection.path
+        M.save_input(save_dir, opts.initial_path, function(filename)
+            if filename and filename ~= "" then
+                local save_path = save_dir .. "/" .. filename
+                ensure_file_exists(save_path)
+                M.finish({ save_path }, opts, bufnr)
+            end
+        end)
+        return
+    end
+
+    -- Case 2: File selected (existing or new entry in buffer)
+    local is_existing = selection.id and state:get_by_id(selection.id)
+    local is_suggested = selection.id and selection.id == state.suggested_entry_id
+
+    -- Get the intended path from buffer (may differ from state if renamed/moved)
+    local intended_path = selection.path
+    if selection.id then
+        local parser = require("sap.parser")
+        local parsed = parser.parse_buffer(bufnr, state.root_path)
+        for _, p in ipairs(parsed) do
+            if p.id == selection.id then
+                intended_path = p.path
+                break
+            end
         end
     end
 
-    M.finish(paths, opts, bufnr)
+    -- Helper to finish with the intended path
+    local function do_finish()
+        M.finish({ intended_path }, opts, bufnr)
+    end
+
+    -- For existing files that were renamed/moved, apply the change
+    if is_existing then
+        local original_path = state:get_by_id(selection.id).path
+        if intended_path ~= original_path then
+            -- Apply the rename/move
+            local ok, err = fs.move(original_path, intended_path)
+            if not ok then
+                vim.notify("sap picker: failed to rename: " .. (err or "unknown error"), vim.log.levels.ERROR)
+                return
+            end
+            do_finish()
+        elseif not is_suggested then
+            -- Same path, different file - confirm overwrite
+            confirm_dialog("Overwrite " .. selection.name .. "?", function(confirmed)
+                if confirmed then
+                    do_finish()
+                end
+            end)
+        else
+            do_finish()
+        end
+    else
+        -- New entry - create the file so portal/app can use it
+        ensure_file_exists(intended_path)
+        do_finish()
+    end
 end
 
 --- Write output and exit

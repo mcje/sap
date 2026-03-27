@@ -2,8 +2,9 @@
 # Sap file manager - CLI wrapper
 #
 # Usage:
-#   sap [directory]           - Open in current terminal
-#   sap --spawn [directory]   - Spawn new terminal window (for WM keybinds)
+#   sap [directory]                    - Open in current terminal
+#   sap --spawn [directory]            - Spawn new terminal window (for WM keybinds)
+#   sap --preview[=POSITION] [dir]     - Open with preview (float/right/bottom)
 #
 # Configuration:
 #   TERMINAL or TERMCMD: Terminal emulator command (default: foot)
@@ -11,12 +12,21 @@
 set -e
 
 SPAWN=false
+PREVIEW=""
 
 # Parse flags
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -s|--spawn)
             SPAWN=true
+            shift
+            ;;
+        --preview=*)
+            PREVIEW="${1#--preview=}"
+            shift
+            ;;
+        --preview|-p)
+            PREVIEW="right"  # default for flag without value
             shift
             ;;
         *)
@@ -32,14 +42,18 @@ if [[ -d "$START_DIR" ]]; then
     START_DIR=$(realpath "$START_DIR")
 fi
 
+# Build opts table
+OPTS=""
+[[ -n "$PREVIEW" ]] && OPTS="$OPTS, preview = '$PREVIEW'"
+
 # Build nvim command (bypasses lazy loading)
 if [[ "$SPAWN" == "false" ]]; then
-    NVIM_CMD="lua require('sap').open('$START_DIR')"
+    NVIM_CMD="lua require('sap').open('$START_DIR', {quit_on_close = true$OPTS})"
     exec nvim -c "$NVIM_CMD"
 fi
 
 # Spawn mode - quit_on_close so 'q' exits neovim, restricted mode
-NVIM_CMD="lua require('sap.restricted').enable(); require('sap').open('$START_DIR', {quit_on_close = true})"
+NVIM_CMD="lua require('sap.standalone').enable(); require('sap').open('$START_DIR', {quit_on_close = true$OPTS})"
 
 # Spawn mode - open new terminal window
 TERM_CMD="${TERMINAL:-${TERMCMD:-foot}}"

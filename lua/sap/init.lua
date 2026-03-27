@@ -41,13 +41,17 @@ M.open = function(path, opts)
         elseif cmd == "collapse" then
             actions.collapse()
         elseif cmd == "indent" then
-            actions.indent(opts.range > 0)()
+            actions.indent(cmd_opts.range > 0)()
         elseif cmd == "unindent" then
-            actions.unindent(opts.range > 0)()
+            actions.unindent(cmd_opts.range > 0)()
         elseif cmd == "paste" then
             actions.paste()
         elseif cmd == "paste_before" then
             actions.paste_before()
+        elseif cmd == "open_external" then
+            actions.open_external()
+        elseif cmd == "preview" then
+            require("sap.preview").toggle()
         end
     end, { nargs = 1, range = true })
 
@@ -60,6 +64,18 @@ M.open = function(path, opts)
     end
 
     vim.api.nvim_set_current_buf(bufnr)
+
+    -- Auto-open preview if requested
+    if opts.preview then
+        -- Override position if specified
+        if type(opts.preview) == "string" then
+            config.options.preview = config.options.preview or {}
+            config.options.preview.position = opts.preview
+        end
+        vim.schedule(function()
+            require("sap.preview").open()
+        end)
+    end
 end
 
 return M

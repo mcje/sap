@@ -42,6 +42,17 @@ function M.open()
     end
 end
 
+--- Open file or directory with external application (xdg-open)
+function M.open_external()
+    local _, _, state, entry = get_context()
+    if not entry or not state then
+        return
+    end
+
+    local cmd = config.options.open_cmd or "xdg-open"
+    vim.fn.jobstart({ cmd, entry.path }, { detach = true })
+end
+
 --- Go to parent directory (in place, surgical)
 function M.parent()
     local bufnr, linenr, state, entry = get_context()

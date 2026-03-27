@@ -44,9 +44,11 @@ M.defaults = {
             { "q", function() require("sap.picker").cancel() end, desc = "Cancel" },
             -- Navigation keymaps (call actions directly)
             { "<BS>", function() require("sap.actions").parent() end, desc = "Go to parent" },
+            { "<C-CR>", function() require("sap.actions").set_root() end, desc = "Enter directory" },
             { "l", function() require("sap.actions").expand() end, desc = "Expand directory" },
             { "h", function() require("sap.actions").collapse() end, desc = "Collapse directory" },
             { ".", function() require("sap.actions").toggle_hidden() end, desc = "Toggle hidden" },
+            { "K", function() require("sap.preview").toggle() end, desc = "Toggle preview" },
         },
     },
 
@@ -66,6 +68,20 @@ M.defaults = {
         { "<", "<cmd>Sap unindent<cr>", mode = "v", desc = "Unindent" },
         { "p", "<cmd>Sap paste<cr>", desc = "Smart paste" },
         { "P", "<cmd>Sap paste_before<cr>", desc = "Smart paste before" },
+        { "gx", "<cmd>Sap open_external<cr>", desc = "Open with external app" },
+        { "K", "<cmd>Sap preview<cr>", desc = "Toggle preview" },
+    },
+
+    -- Command to open files externally (xdg-open, open, etc.)
+    open_cmd = "xdg-open",
+
+    -- Preview configuration
+    preview = {
+        position = "float", -- "float", "right", "bottom"
+        width = 0.5,        -- fraction of editor width
+        height = 0.8,       -- fraction of editor height
+        max_lines = 500,    -- max lines to preview
+        max_size = 100000,  -- max file size in bytes (100KB)
     },
 }
 

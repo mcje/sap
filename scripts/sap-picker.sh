@@ -53,7 +53,7 @@ fi
 PICKER_OPTS="mode='$MODE', output_file='$OUTPUT', quit_on_confirm=true"
 [[ "$MULTIPLE" == "1" ]] && PICKER_OPTS="$PICKER_OPTS, multiple=true"
 [[ -n "$PATH_HINT" ]] && PICKER_OPTS="$PICKER_OPTS, initial_path='$PATH_HINT'"
-NVIM_CMD="lua require('sap.restricted').enable(); require('sap.picker').open({$PICKER_OPTS})"
+NVIM_CMD="lua require('sap.standalone').enable(); require('sap.picker').open({$PICKER_OPTS})"
 
 log_debug "Command: $NVIM_CMD"
 
