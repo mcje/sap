@@ -1,0 +1,64 @@
+#!/bin/bash
+# Sap file manager - CLI wrapper
+#
+# Usage:
+#   sap [directory]           - Open in current terminal
+#   sap --spawn [directory]   - Spawn new terminal window (for WM keybinds)
+#
+# Configuration:
+#   TERMINAL or TERMCMD: Terminal emulator command (default: foot)
+
+set -e
+
+SPAWN=false
+
+# Parse flags
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -s|--spawn)
+            SPAWN=true
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+START_DIR="${1:-.}"
+
+# Resolve to absolute path if it exists
+if [[ -d "$START_DIR" ]]; then
+    START_DIR=$(realpath "$START_DIR")
+fi
+
+# Build nvim command (bypasses lazy loading)
+if [[ "$SPAWN" == "false" ]]; then
+    NVIM_CMD="lua require('sap').open('$START_DIR')"
+    exec nvim -c "$NVIM_CMD"
+fi
+
+# Spawn mode - quit_on_close so 'q' exits neovim, restricted mode
+NVIM_CMD="lua require('sap.restricted').enable(); require('sap').open('$START_DIR', {quit_on_close = true})"
+
+# Spawn mode - open new terminal window
+TERM_CMD="${TERMINAL:-${TERMCMD:-foot}}"
+
+case "$TERM_CMD" in
+    *kitty*)
+        exec $TERM_CMD -o confirm_os_window_close=0 --app-id sap-fm --directory "$START_DIR" nvim -c "$NVIM_CMD"
+        ;;
+    *alacritty*)
+        exec $TERM_CMD --class sap-fm --working-directory "$START_DIR" -e nvim -c "$NVIM_CMD"
+        ;;
+    *wezterm*)
+        exec $TERM_CMD start --class sap-fm --cwd "$START_DIR" -- nvim -c "$NVIM_CMD"
+        ;;
+    *foot*)
+        exec $TERM_CMD --app-id sap-fm --working-directory="$START_DIR" nvim -c "$NVIM_CMD"
+        ;;
+    *)
+        cd "$START_DIR"
+        exec $TERM_CMD -e nvim -c "$NVIM_CMD"
+        ;;
+esac

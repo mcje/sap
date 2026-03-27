@@ -33,6 +33,23 @@ M.defaults = {
         },
     },
 
+    -- Picker mode configuration (for file dialog usage)
+    picker = {
+        mark_hl = "WarningMsg",  -- Highlight group for mark indicator
+        keymaps = {
+            { "<Space>", function() require("sap.picker").toggle_mark() end, desc = "Toggle mark" },
+            { "<Tab>", function() require("sap.picker").toggle_mark_down() end, desc = "Mark and move down" },
+            { "<CR>", function() require("sap.picker").confirm() end, desc = "Confirm selection" },
+            { "<Esc>", function() require("sap.picker").cancel() end, desc = "Cancel" },
+            { "q", function() require("sap.picker").cancel() end, desc = "Cancel" },
+            -- Navigation keymaps (call actions directly)
+            { "<BS>", function() require("sap.actions").parent() end, desc = "Go to parent" },
+            { "l", function() require("sap.actions").expand() end, desc = "Expand directory" },
+            { "h", function() require("sap.actions").collapse() end, desc = "Collapse directory" },
+            { ".", function() require("sap.actions").toggle_hidden() end, desc = "Toggle hidden" },
+        },
+    },
+
     -- Buffer-local keymaps (set to false to disable all)
     buffer_keymaps = {
         { "<CR>", "<cmd>Sap open<cr>", desc = "Open file / toggle dir" },

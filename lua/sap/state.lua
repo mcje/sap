@@ -16,6 +16,16 @@ local fs = require("sap.fs")
 ---@field path string
 ---@field line string  -- Raw line for exact restoration
 
+---@class PickerOpts
+---@field mode "open"|"open_dir"|"save"
+---@field multiple boolean
+---@field output_file string?
+---@field callback function?
+---@field initial_path string?
+---@field quit_on_confirm boolean
+---@field register string|boolean?  -- Register to save selection (true = "+", string = specific register)
+---@field notify boolean?  -- Show selection with vim.notify
+
 ---@class State
 ---@field root_path string
 ---@field entries table<integer, Entry>
@@ -24,6 +34,8 @@ local fs = require("sap.fs")
 ---@field show_hidden boolean
 ---@field next_id integer
 ---@field cached_content table<string, CachedEntry[]>  -- parent_path -> cached buffer lines
+---@field picker_opts PickerOpts?
+---@field marked table<integer, boolean>  -- entry id -> marked
 local State = {}
 State.__index = State
 
@@ -37,8 +49,9 @@ end
 
 ---@param root_path string
 ---@param show_hidden boolean?
+---@param picker_opts PickerOpts?
 ---@return State
-function State.new(root_path, show_hidden)
+function State.new(root_path, show_hidden, picker_opts)
     root_path = vim.fn.fnamemodify(vim.fn.expand(root_path), ":p"):gsub("/$", "")
 
     local self = setmetatable({}, State)
@@ -50,6 +63,8 @@ function State.new(root_path, show_hidden)
     self.next_id = 1
     self.sort = default_sort
     self.cached_content = {}
+    self.picker_opts = picker_opts
+    self.marked = {}
 
     -- Add root itself as an entry (no parent)
     self:add_entry(root_path, nil)
@@ -158,6 +173,10 @@ end
 function State:expand(entry)
     if entry.type ~= "directory" then
         return nil, "not a directory"
+    end
+
+    if self.expanded[entry.path] then
+        return nil, "already expanded"
     end
 
     self.expanded[entry.path] = true
@@ -405,6 +424,36 @@ function State:get_all_cached_content(path)
         end
     end
     return all
+end
+
+--- Toggle mark on an entry (for picker mode)
+---@param entry Entry
+function State:toggle_mark(entry)
+    if self.marked[entry.id] then
+        self.marked[entry.id] = nil
+    else
+        self.marked[entry.id] = true
+    end
+end
+
+--- Check if an entry is marked (for picker mode)
+---@param entry Entry
+---@return boolean
+function State:is_marked(entry)
+    return self.marked[entry.id] == true
+end
+
+--- Get all marked entries (for picker mode)
+---@return Entry[]
+function State:get_marked_entries()
+    local result = {}
+    for id, _ in pairs(self.marked) do
+        local entry = self.entries[id]
+        if entry then
+            result[#result + 1] = entry
+        end
+    end
+    return result
 end
 
 return State

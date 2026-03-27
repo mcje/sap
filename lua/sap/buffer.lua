@@ -129,7 +129,7 @@ local function setup_autocmds(bufnr)
         end,
     })
 
-    -- Save handler
+    -- Save handler (applies filesystem changes)
     vim.api.nvim_create_autocmd("BufWriteCmd", {
         buffer = bufnr,
         callback = function()
@@ -242,28 +242,36 @@ local function setup_autocmds(bufnr)
 end
 
 ---@param path string
+---@param picker_opts PickerOpts?
 ---@return integer? bufnr
 ---@return string? error
-function M.create(path)
+function M.create(path, picker_opts)
     path = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
-    local bufname = constants.BUFFER_SCHEME .. path
 
-    -- Check for existing buffer
-    local existing = vim.fn.bufnr(bufname)
-    if existing ~= -1 then
-        if M.states[existing] then
-            -- Reuse existing buffer with state
-            vim.api.nvim_set_current_buf(existing)
-            return existing
-        else
-            -- Stale buffer (e.g., after module reload), wipe it
-            -- WARN: This force-deletes the buffer, losing any unsaved edits.
-            vim.api.nvim_buf_delete(existing, { force = true })
+    -- Picker buffers use unique names to avoid conflicts
+    local bufname
+    if picker_opts then
+        bufname = string.format("sap-picker://%s/%d", path, vim.uv.hrtime())
+    else
+        bufname = constants.BUFFER_SCHEME .. path
+
+        -- Check for existing buffer (only in non-picker mode)
+        local existing = vim.fn.bufnr(bufname)
+        if existing ~= -1 then
+            if M.states[existing] then
+                -- Reuse existing buffer with state
+                vim.api.nvim_set_current_buf(existing)
+                return existing
+            else
+                -- Stale buffer (e.g., after module reload), wipe it
+                -- WARN: This force-deletes the buffer, losing any unsaved edits.
+                vim.api.nvim_buf_delete(existing, { force = true })
+            end
         end
     end
 
     -- Create state
-    local state = State.new(path, config.options.show_hidden)
+    local state = State.new(path, config.options.show_hidden, picker_opts)
 
     -- Create buffer
     local bufnr = vim.api.nvim_create_buf(false, false)
@@ -635,7 +643,11 @@ end
 function M.close(bufnr)
     bufnr = bufnr or vim.api.nvim_get_current_buf()
 
-    if M.has_unsaved_changes(bufnr) then
+    -- Skip unsaved changes check in picker mode
+    local state = M.states[bufnr]
+    local is_picker = state and state.picker_opts
+
+    if not is_picker and M.has_unsaved_changes(bufnr) then
         local choice = vim.fn.confirm("Unsaved changes. Close anyway?", "&Yes\n&No", 2)
         if choice ~= 1 then
             return

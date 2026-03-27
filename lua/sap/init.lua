@@ -8,8 +8,9 @@ M.setup = function(opts)
     config.setup(opts)
 end
 
-M.open = function(path)
+M.open = function(path, opts)
     path = path or vim.fn.getcwd()
+    opts = opts or {}
     local bufnr, err = require("sap.buffer").create(path)
     if not bufnr then
         vim.notify("sap: " .. err, vim.log.levels.ERROR)
@@ -17,8 +18,8 @@ M.open = function(path)
     end
 
     -- Buffer commands
-    vim.api.nvim_buf_create_user_command(bufnr, "Sap", function(opts)
-        local cmd = opts.fargs[1]
+    vim.api.nvim_buf_create_user_command(bufnr, "Sap", function(cmd_opts)
+        local cmd = cmd_opts.fargs[1]
         if cmd == "open" then
             actions.open()
         elseif cmd == "parent" then
@@ -28,7 +29,11 @@ M.open = function(path)
         elseif cmd == "refresh" then
             actions.refresh()
         elseif cmd == "quit" then
-            buffer.close(bufnr)
+            if opts.quit_on_close then
+                vim.cmd("qa!")
+            else
+                buffer.close(bufnr)
+            end
         elseif cmd == "toggle_hidden" then
             actions.toggle_hidden()
         elseif cmd == "expand" then

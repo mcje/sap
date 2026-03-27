@@ -6,6 +6,7 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("sap")
 local ns_icons = vim.api.nvim_create_namespace("sap_icons") -- Separate namespace for inline icons
+local ns_picker = vim.api.nvim_create_namespace("sap_picker") -- Picker mark highlights (not cleared in on_win)
 
 -- Pre-computed guide info per buffer: bufnr -> { [row] = { guide = "...", is_expanded = bool } }
 ---@type table<integer, table<integer, { guide: string, is_expanded: boolean?, is_dir: boolean }>>
@@ -87,6 +88,7 @@ function M.setup_decoration_provider(states)
             -- Clear icon extmarks for visible range before redrawing
             if states[bufnr] then
                 vim.api.nvim_buf_clear_namespace(bufnr, ns_icons, toprow, botrow + 1)
+                vim.api.nvim_buf_clear_namespace(bufnr, ns_picker, toprow, botrow + 1)
             end
         end,
         on_line = function(_, _, bufnr, row)
@@ -158,6 +160,15 @@ function M.setup_decoration_provider(states)
                 end
             end
 
+            -- Picker mark indicator (show + icon when marked)
+            local picker_cfg = config.options.picker
+            if state.picker_opts and entry and state:is_marked(entry) then
+                vim.api.nvim_buf_set_extmark(bufnr, ns_picker, row, col, {
+                    virt_text = { { "+ ", picker_cfg.mark_hl } },
+                    virt_text_pos = "inline",
+                })
+            end
+
             -- Expand/collapse indicator for directories
             -- NOTE: inline + ephemeral doesn't work in Neovim, so we use
             -- non-ephemeral extmarks in a separate namespace, cleared in on_win
@@ -193,6 +204,7 @@ function M.setup_decoration_provider(states)
         end,
     })
 end
+
 
 ---@class FlatEntry
 ---@field entry Entry
